@@ -191,12 +191,33 @@ def process_epub(epub_path: str, output_dir: str) -> Book:
     print("Extracting images...")
     image_map = {} # Key: internal_path, Value: local_relative_path
 
+    # Debug: Log all items to see what's being classified as what
+    print("  Scanning all EPUB items...")
     for item in book.get_items():
-        if item.get_type() == ebooklib.ITEM_IMAGE:
+        item_type = item.get_type()
+        if 'image' in item.get_name().lower() or item.get_name().endswith(('.jpg', '.jpeg', '.png', '.gif', '.svg')):
+            print(f"    Item: {item.get_name()}, Type: {item_type}, Expected: {ebooklib.ITEM_IMAGE}")
+    
+    for item in book.get_items():
+        item_type = item.get_type()
+        # Check both the official type and file extension
+        is_image_by_type = item_type == ebooklib.ITEM_IMAGE
+        is_image_by_extension = item.get_name().lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp'))
+        
+        if is_image_by_type or is_image_by_extension:
             # Normalize filename
             original_fname = os.path.basename(item.get_name())
+            print(f"  Found image: {item.get_name()} -> {original_fname}")
+            
             # Sanitize filename for OS
             safe_fname = "".join([c for c in original_fname if c.isalpha() or c.isdigit() or c in '._-']).strip()
+            
+            # If sanitization removed everything, use a fallback
+            if not safe_fname:
+                safe_fname = f"image_{hash(item.get_name())}.bin"
+                print(f"    Warning: Sanitized filename empty, using: {safe_fname}")
+            
+            print(f"    Saving as: {safe_fname}")
 
             # Save to disk
             local_path = os.path.join(images_dir, safe_fname)
@@ -247,6 +268,9 @@ def process_epub(epub_path: str, output_dir: str) -> Book:
                     img['src'] = image_map[src_decoded]
                 elif filename in image_map:
                     img['src'] = image_map[filename]
+                else:
+                    print(f"  Warning: Image not found in map: {src_decoded} (filename: {filename})")
+                    # Keep original src - it should work now with extension-based extraction
 
             # B. Clean HTML
             soup = clean_html_content(soup)
